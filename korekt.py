@@ -8,29 +8,6 @@ from fann2 import libfann
 from os.path import isfile
 
 
-def resolve_conflicts(inputs, outputs):
-    """
-    Checks for duplicate inputs and if there are any,
-    remove one and set the output to the max of the two outputs
-    Args:
-        inputs (list<list<float>>): Array of input vectors
-        outputs (list<list<float>>): Array of output vectors
-    Returns:
-        tuple<inputs, outputs>: The modified inputs and outputs
-    """
-    new_in, new_out = [], []
-    for i in range(len(inputs)):
-        found_duplicate = False
-        for j in range(i + 1, len(inputs)):
-            if np.array_equal(inputs[i], inputs[j]):
-                found_duplicate = True
-                outputs[j] =  np.maximum.reduce([outputs[i], outputs[j]])
-        if not found_duplicate:
-            new_in.append(inputs[i])
-            new_out.append(outputs[i])
-    return new_in, new_out
-
-
 def print_usage():
     print('Usage:', sys.argv[0], 'TEXT_FILE')
     print('\tThe text file should contain a list of words in the dictionary')
@@ -54,7 +31,18 @@ for char in set(text):
 in_len = len(char_to_id)
 out_len = len(id_to_word)
 
-print(out_len)
+print('Saving Ids...')
+ids = {
+    'word_to_id': word_to_id,
+    'id_to_word': id_to_word,
+    'char_to_id': char_to_id
+}
+
+prefix = sys.argv[1].replace('.txt', '')
+with open(prefix + '.ids', 'w') as f:
+    json.dump(ids, f, indent=4)
+
+
 def vectorize_in(word):
     vec = np.zeros((in_len,))
     for char in word:
@@ -67,32 +55,39 @@ def vectorize_out(word):
     vec[word_to_id[word]] = 1.0
     return vec
 
-inputs = [vectorize_in(word) for word in words]
-outputs = [vectorize_out(word) for word in words]
+print('Generating sets...')
+sets = {}
+for word in words:
+    st = frozenset(word)
+    if st in sets:
+        sets[st].append(word)
+    else:
+        sets[st] = [word]
 
-inputs, outputs = resolve_conflicts(inputs, outputs)
-
-data = libfann.training_data()
-data.set_train_data(inputs, outputs)
-
-prefix = sys.argv[1].replace('.txt', '')
-
+print('Creating network...')
 nn = libfann.neural_net()
 nn.create_standard_array([in_len, out_len])
 nn.set_train_stop_function(libfann.STOPFUNC_BIT)
 nn.set_training_algorithm(libfann.TRAIN_INCREMENTAL)
-nn.set_learning_rate(1000)
-nn.train_on_data(data, 100000, 1, 0)
+nn.set_learning_rate(0.5)
+data = libfann.training_data()
+
+set_items = list(sets.items())
+step_samples = min(2000, len(set_items))
+num_steps = round(len(set_items) / step_samples)
+
+for i in range(step_samples, len(set_items) + 1, step_samples):
+    print('Training on mini-batch', str(round(i / step_samples)), '/', str(num_steps) + '...')
+
+    inputs, outputs = [], []
+    for inp_set, words in set_items[i - step_samples:i]:
+        inputs.append(vectorize_in(inp_set))
+        outputs.append(np.maximum.reduce([vectorize_out(w) for w in words]))
+    data.set_train_data(inputs, outputs)
+    nn.train_on_data(data, 1000, 1, 0)
+
+print('Saving Network...')
 nn.save(prefix + '.net')
-
-ids = {
-    'word_to_id': word_to_id,
-    'id_to_word': id_to_word,
-    'char_to_id': char_to_id
-}
-
-with open(prefix + '.ids', 'w') as f:
-    json.dump(ids, f, indent=4)
 
 inp = ''
 while inp != 'q':
