@@ -4,7 +4,7 @@ import json
 import sys
 import numpy as np
 
-from fann2 import libfann
+from fann2 import libfann as fann
 from os.path import isfile
 
 
@@ -65,12 +65,12 @@ for word in words:
         sets[st] = [word]
 
 print('Creating network...')
-nn = libfann.neural_net()
+nn = fann.neural_net()
 nn.create_standard_array([in_len, out_len])
-nn.set_train_stop_function(libfann.STOPFUNC_BIT)
-nn.set_training_algorithm(libfann.TRAIN_INCREMENTAL)
+nn.set_train_stop_function(fann.STOPFUNC_BIT)
+nn.set_training_algorithm(fann.TRAIN_INCREMENTAL)
 nn.set_learning_rate(0.5)
-data = libfann.training_data()
+data = fann.training_data()
 
 set_items = list(sets.items())
 step_samples = min(2000, len(set_items))
@@ -84,7 +84,7 @@ for i in range(step_samples, len(set_items) + 1, step_samples):
         inputs.append(vectorize_in(inp_set))
         outputs.append(np.maximum.reduce([vectorize_out(w) for w in words]))
     data.set_train_data(inputs, outputs)
-    nn.train_on_data(data, 1000, 1, 0)
+    nn.train_on_data(data, 1, 1, 0)
 
 print('Saving Network...')
 nn.save(prefix + '.net')
