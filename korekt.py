@@ -69,22 +69,37 @@ nn = fann.neural_net()
 nn.create_standard_array([in_len, out_len])
 nn.set_train_stop_function(fann.STOPFUNC_BIT)
 nn.set_training_algorithm(fann.TRAIN_INCREMENTAL)
-nn.set_learning_rate(0.5)
+nn.set_learning_rate(1000)
 data = fann.training_data()
 
 set_items = list(sets.items())
 step_samples = min(2000, len(set_items))
 num_steps = round(len(set_items) / step_samples)
 
-for i in range(step_samples, len(set_items) + 1, step_samples):
-    print('Training on mini-batch', str(round(i / step_samples)), '/', str(num_steps) + '...')
+epoch = 1
+bit_fail = 1
+while bit_fail > 0:
+    print('=== Epoch', epoch, '===')
+    epoch += 1
+    bit_fail = 0
+    for i in range(step_samples, len(set_items) + 1, step_samples):
+        print('Training on mini-batch', str(round(i / step_samples)), '/', str(num_steps) + ': ', end='', flush=True)
 
-    inputs, outputs = [], []
-    for inp_set, words in set_items[i - step_samples:i]:
-        inputs.append(vectorize_in(inp_set))
-        outputs.append(np.maximum.reduce([vectorize_out(w) for w in words]))
-    data.set_train_data(inputs, outputs)
-    nn.train_on_data(data, 1, 1, 0)
+        inputs, outputs = [], []
+        for inp_set, words in set_items[i - step_samples:i]:
+            inputs.append(vectorize_in(inp_set))
+            outputs.append(np.maximum.reduce([vectorize_out(w) for w in words]))
+        data.set_train_data(inputs, outputs)
+        nn.train_on_data(data, 1, 0, 0)
+        failed_bits = nn.get_bit_fail()
+        print(failed_bits, '->', end='', flush=True)
+        if failed_bits == 0:
+            print(' !')
+            continue
+        bit_fail += nn.get_bit_fail()
+        nn.train_on_data(data, 3, 0, 0)
+        print('',nn.get_bit_fail())
+    print('Total bit fail:', bit_fail)
 
 print('Saving Network...')
 nn.save(prefix + '.net')
