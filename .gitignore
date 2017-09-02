@@ -1,5 +1,6 @@
 # Korekt specific model data files
 *.txt
+*.json
 *.net
 *.ids
 
